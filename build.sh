@@ -3,7 +3,7 @@
 GITHUB_OWNER=ddev
 PUSH=""
 LOAD=""
-IMAGE_NAME="ghcr.io/ddev/ddev-gitlab-ci"
+IMAGE_NAME="ghcr.io/akibaat/ddev-gitlab-ci"
 DDEV_VERSION=""
 
 # @todo:
@@ -99,4 +99,4 @@ fi
 echo $DDEV_VERSION
 echo $DOCKER_TAGS
 
-docker buildx build ${PLATFORM} --progress plain --no-cache --pull . -f Dockerfile ${DOCKER_TAGS[@]} --build-arg ddev_version="$DDEV_VERSION" $PUSH $LOAD
+docker buildx build ${PLATFORM} --allow security.insecure --progress plain --no-cache --pull . -f Dockerfile ${DOCKER_TAGS[@]} --build-arg ddev_version="$DDEV_VERSION" $PUSH $LOAD

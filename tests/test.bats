@@ -84,5 +84,5 @@ setup() {
 docker-run() {
   local COMMAND=${1}
 
-  docker run --rm -it --network ddev-docker ghcr.io/ddev/ddev-gitlab-ci:"${DDEV_VERSION}" /bin/sh -c "${COMMAND}"
+  docker run --privileged --rm -it ghcr.io/akibaat/ddev-gitlab-ci:"${DDEV_VERSION}" /bin/sh -c "${COMMAND}"
 }
