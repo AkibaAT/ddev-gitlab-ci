@@ -6,36 +6,25 @@ on:
       - main
 
 jobs:
-  build:
-    name: Build and Push Container
-    runs-on: ubuntu-latest
+  test:
+    name: Build and test image
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         version: [ stable ]
     steps:
-      -
-        name: Checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
-      -
-        name: Docker info
+      - name: Docker info
         run: docker info
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
-      -
-        name: Setup bats and bats libs
+      - name: Setup bats and bats libs
         id: setup-bats
         uses: bats-core/bats-action@3.0.0
-      -
-        name: Check out code
+      - name: Check out code
         uses: actions/checkout@v1
-      -
-        name: "Test ddev ${{ matrix.version }} image"
+      - name: "Test ddev ${{ matrix.version }} image"
         shell: 'script -q -e -c "bash {0}"'
         env:
           BATS_LIB_PATH: ${{ steps.setup-bats.outputs.lib-path }}
@@ -43,10 +32,73 @@ jobs:
           sudo snap install yq
           ./build.sh -v ${{ matrix.version }} -l
           DDEV_VERSION=${{ matrix.version }} bash bats tests
+
+  build:
+    needs: test
+    name: Build and push arch-specific images
+    runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        version: [ stable ]
+        platform: [ amd64, arm64 ]
+        include:
+          - platform: amd64
+            runs-on: ubuntu-24.04
+          - platform: arm64
+            runs-on: ubuntu-24.04-arm
+    steps:
       -
-        name: "Build ddev ${{ matrix.version }} multi-arch image"
+        name: Checkout code
+        uses: actions/checkout@v4
+      -
+        name: Docker info
+        run: docker info
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      -
+        name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: "Build ddev ${{ matrix.platform }} image"
         shell: 'script -q -e -c "bash {0}"'
-        run: |
-          echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure' --platform=linux/arm64,linux/amd64
-          ./build.sh -v ${{ matrix.version }} -x -p
+        run: SUFFIX="-${{ matrix.platform }}" ./build.sh -v ${{ matrix.version }} -p
+
+  merge-manifests:
+    needs: build
+    name: Merge manifests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        version: [ stable ]
+    steps:
+      -
+        name: Checkout code
+        uses: actions/checkout@v4
+      -
+        name: Docker info
+        run: docker info
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      -
+        name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: "Merge ${{ matrix.version }} manifests"
+        shell: 'script -q -e -c "bash {0}"'
+        run: ./build.sh -v ${{ matrix.version }} -m

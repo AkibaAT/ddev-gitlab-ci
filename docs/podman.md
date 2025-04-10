@@ -17,8 +17,6 @@ to use DDEV within the docker executor using Podman (DockerInPodman).
   [runners.docker]
     # ...
     tls_verify = false
-    services_privileged = true
-    allowed_privileged_services = ["docker:dind"]
     # Replace 1000 with the users id, run `id -u` to get the id
     host = "unix:///run/user/1000/podman/podman.sock"
 ```

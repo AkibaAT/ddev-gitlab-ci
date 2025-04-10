@@ -19,8 +19,6 @@ to use DDEV within the docker executor (DockerInDocker).
   [runners.docker]
     # ...
     tls_verify = false
-    services_privileged = true
-    allowed_privileged_services = ["docker:dind"]
 ```
 
 ## GitLab CI Job for DDEV

@@ -5,17 +5,15 @@ PUSH=""
 LOAD=""
 IMAGE_NAME="ghcr.io/akibaat/ddev-gitlab-ci"
 DDEV_VERSION=""
-
-# @todo:
-#   * --push --load options
-#   * Use bats for tests?!
+SUFFIX=${SUFFIX:-""}
+MERGE=0
 
 help() {
     echo "Available options:"
     echo "  * v - DDEV version e.g. 'v1.23.1'"
     echo "  * l - Load the image (--load)"
     echo "  * p - Push the image (--push)"
-    echo "  * x - Build multi-arch image (--platform linux/amd64,linux/arm64)"
+    echo "  * m - Merge the manifests"
 }
 
 loadVersionAndTags() {
@@ -44,13 +42,13 @@ loadVersionAndTags() {
 
   # Define image tags
   if [[ $additional_tag == "" ]]; then
-    DOCKER_TAGS=("-t $IMAGE_NAME:${DDEV_VERSION}")
+    DOCKER_TAGS=("$IMAGE_NAME:${DDEV_VERSION}$SUFFIX")
   else
-    DOCKER_TAGS=("-t $IMAGE_NAME:$additional_tag" "-t $IMAGE_NAME:$DDEV_VERSION")
+    DOCKER_TAGS=("$IMAGE_NAME:$additional_tag$SUFFIX" "$IMAGE_NAME:$DDEV_VERSION$SUFFIX")
   fi
 }
 
-while getopts ":v:hplx" opt; do
+while getopts ":v:hplm" opt; do
   case $opt in
   h)
     help
@@ -65,8 +63,8 @@ while getopts ":v:hplx" opt; do
   l)
     LOAD="--load"
     ;;
-  x)
-    PLATFORM="--platform linux/amd64,linux/arm64"
+  m)
+    MERGE=1
     ;;
   *)
     help
@@ -79,7 +77,7 @@ done
 # Set version and tag for latest (aka nightly)
 if [ "$OPTION_VERSION" = "latest" ]; then
   DDEV_VERSION="latest"
-  DOCKER_TAGS=("-t $IMAGE_NAME:latest")
+  DOCKER_TAGS=("$IMAGE_NAME:latest$SUFFIX")
 elif [ "$OPTION_VERSION" = "stable" ]; then
   DDEV_VERSION="$(curl --silent -L -H "Accept: application/vnd.github+json" https://api.github.com/repos/ddev/ddev/releases/latest | jq -r '.tag_name')"
 
@@ -91,7 +89,7 @@ elif [ "$OPTION_VERSION" = "stable" ]; then
   # Get version like v1.24
   additional_tag="${DDEV_VERSION%.*}"
 
-  DOCKER_TAGS=("-t $IMAGE_NAME:stable" "-t $IMAGE_NAME:$additional_tag" "-t $IMAGE_NAME:$DDEV_VERSION")
+  DOCKER_TAGS=("$IMAGE_NAME:stable$SUFFIX" "$IMAGE_NAME:$additional_tag$SUFFIX" "$IMAGE_NAME:$DDEV_VERSION$SUFFIX")
 else
   loadVersionAndTags
 fi
@@ -99,4 +97,16 @@ fi
 echo $DDEV_VERSION
 echo $DOCKER_TAGS
 
-docker buildx build ${PLATFORM} --allow security.insecure --progress plain --no-cache --pull . -f Dockerfile ${DOCKER_TAGS[@]} --build-arg ddev_version="$DDEV_VERSION" $PUSH $LOAD
+if [ "$MERGE" = "1" ]; then
+  for DOCKER_TAG in "${DOCKER_TAGS[@]}"; do
+    echo "Merging ${DOCKER_TAG}"
+    docker manifest create ${DOCKER_TAG} ${DOCKER_TAG}-amd64 ${DOCKER_TAG}-arm64
+    docker manifest push ${DOCKER_TAG}
+  done
+else
+  BUILD_TAGS=()
+  for TAG in "${DOCKER_TAGS[@]}"; do
+    BUILD_TAGS+=("-t" "$TAG")
+  done
+  docker buildx build --allow security.insecure --progress plain --no-cache --pull --provenance=false . -f Dockerfile ${BUILD_TAGS[@]} --build-arg ddev_version="$DDEV_VERSION" $PUSH $LOAD
+fi

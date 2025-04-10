@@ -30,7 +30,7 @@ Available options:
  * v - DDEV version e.g. 'v1.23.1'
  * l - Load the image (--load)
  * p - Push the image (--push)
- * x - Build multi-arch image (--platform linux/amd64,linux/arm64)
+ * m - Merge the manifests
 
 ### Version to tags
 
@@ -43,7 +43,7 @@ Available options:
 | ./build.sh -v v1.23   | v1.23, v1.23.x (latest bugfix) |
 | ...                   | ...                            |
 
-The image is stored on the [GitHub Package Registry](https://github.com/ddev/ddev-gitlab-ci/pkgs/container/ddev-gitlab-ci)
+The image is stored on the [GitHub Package Registry](https://github.com/akibaat/ddev-gitlab-ci/pkgs/container/ddev-gitlab-ci)
 
 ### Run tests locally
 
