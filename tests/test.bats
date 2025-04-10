@@ -46,7 +46,6 @@ setup() {
         cd ~/ddev-test
         echo '<?php echo \"Hello World\";' > index.php
         ddev config --project-type php --auto
-        ddev config global --no-bind-mounts=true
         ddev start
         curl https://ddev-test.ddev.site/index.php
         ddev poweroff
@@ -66,13 +65,11 @@ setup() {
     assert_success
 }
 
-# Use "--no-bind-mounts=true" to make "ddev debug test" pass. This is only required in testing environment
 @test "Run ddev debug test" {
     local TEST_COMMAND="
       mkdir ~/ddev-test
       cd ~/ddev-test
       ddev config --project-type php --auto
-      ddev config global --no-bind-mounts=true
       ddev debug test
     "
     run docker-run "${TEST_COMMAND}"
@@ -84,5 +81,5 @@ setup() {
 docker-run() {
   local COMMAND=${1}
 
-  docker run --rm -it --network ddev-docker ghcr.io/ddev/ddev-gitlab-ci:"${DDEV_VERSION}" /bin/sh -c "${COMMAND}"
+  docker run --privileged --rm ghcr.io/akibaat/ddev-gitlab-ci:"${DDEV_VERSION}" /bin/sh -c "${COMMAND}"
 }

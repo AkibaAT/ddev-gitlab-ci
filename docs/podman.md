@@ -17,8 +17,6 @@ to use DDEV within the docker executor using Podman (DockerInPodman).
   [runners.docker]
     # ...
     tls_verify = false
-    services_privileged = true
-    allowed_privileged_services = ["docker:dind"]
     # Replace 1000 with the users id, run `id -u` to get the id
     host = "unix:///run/user/1000/podman/podman.sock"
 ```
@@ -33,17 +31,11 @@ stages:
 
 ddev-initialize-podman:
   stage: testing
-  image: ghcr.io/ddev/ddev-gitlab-ci:stable
+  image: ghcr.io/akibaat/ddev-gitlab-ci:stable
   variables:
     # Remove "umask 0000" usage, so DDEV has permissions on the cloned repository
     # see https://docs.gitlab.com/runner/configuration/feature-flags.html#available-feature-flags
     FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: 1
-    # Disable Docker SSL connection
-    DOCKER_TLS_CERTDIR: ""
-    # Fix: "Error response from daemon: bad parameter: link is not supported"
-    FF_NETWORK_PER_BUILD: 1
-  services:
-    - name: docker:dind
   when: always
   script:
     - ddev start
