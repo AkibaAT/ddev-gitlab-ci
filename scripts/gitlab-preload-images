@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(dirname "$0")/.gitlab-include"
+
+echo "🔧 Using proxy level: $PROXY_LEVEL"
+echo "📦 Proxy prefix: ${PROXY_PREFIX:-<none>}"
+
+# 1) Extract service images
+mapfile -t svc_images < <(
+  ddev debug compose-config \
+    | awk '/^\s+image:/ {print $2}' \
+    | sort -u
+)
+
+ddev_version=$(ddev version | awk '/DDEV version/ {print $3}')
+[[ -n "$ddev_version" ]] || { echo "ERROR: Cannot detect DDEV version." >&2; exit 1; }
+
+# 2) Define “extras”
+extras=(
+  busybox:stable
+  ddev/ddev-utilities:latest
+  ddev/ddev-traefik-router:"$ddev_version"
+  ddev/ddev-ssh-agent:"$ddev_version"
+  "${DDEV_WEBIMAGE:-}"
+  "${DDEV_DBIMAGE:-}"
+)
+
+# 3) Combine & dedupe
+mapfile -t all_images < <(
+  printf "%s\n" "${svc_images[@]}" "${extras[@]}" \
+    | grep -v '^$' \
+    | sort -u
+)
+
+# 4) Build arrays of what to pull vs original
+declare -a pull_images orig_images
+for img in "${all_images[@]}"; do
+  if [[ -n "$PROXY_PREFIX" && ( -z "${CI_REGISTRY:-}" || "$img" != "${CI_REGISTRY}"* ) ]]; then
+    proxied="${PROXY_PREFIX}/${img}"
+  else
+    proxied="$img"
+  fi
+  pull_images+=("$proxied")
+  orig_images+=("$img")
+done
+
+# 5) In‑memory Compose pull
+echo "⏳ Pulling ${#pull_images[@]} images via in‑memory Compose…"
+docker compose -f <(
+  {
+    echo "services:"
+    for i in "${!pull_images[@]}"; do
+      svc="img$((i+1))"
+      cat <<-YML
+      ${svc}:
+        image: ${pull_images[i]}
+YML
+    done
+  }
+) pull
+
+# 6) Re‑tag proxied back to original
+for i in "${!pull_images[@]}"; do
+  if [[ "${pull_images[i]}" != "${orig_images[i]}" ]]; then
+    docker tag "${pull_images[i]}" "${orig_images[i]}"
+  fi
+done
+
+echo "✅ Done! All images pulled & tagged (proxy=$PROXY_LEVEL)."

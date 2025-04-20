@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+REGISTRY_URL="${CI_REGISTRY_IMAGE}"
+PROJECT_NAME="ddev-gitlab"
+DOCKER_COMPOSE_FILE=".ddev/.ddev-docker-compose-full.yaml"
+REGISTRY_OVERRIDE_FILE=".ddev/docker-compose.registry-images.yaml"
+NO_WEB_DEPENDENCY_FILE="docker-compose.no-web-dependency.yaml"
+
+echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+
+# Check if the registry override file already exists
+if [[ -f "$REGISTRY_OVERRIDE_FILE" ]]; then
+    echo "Registry override file already exists at $REGISTRY_OVERRIDE_FILE"
+    echo "Skipping image build and using existing configuration"
+    exit 0
+fi
+
+source "$(dirname "$0")/.gitlab-include"
+
+echo "🔧 Using proxy level: $PROXY_LEVEL"
+echo "📦 Proxy prefix: ${PROXY_PREFIX:-<none>}"
+
+# Function to check if an image exists in the registry
+image_exists_in_registry() {
+    local image_name=$1
+    local tag=$2
+
+    echo "Checking if image exists: $image_name:$tag" >&2
+
+    # Try to inspect the image - if it succeeds, the image exists
+    if docker manifest inspect "$image_name:$tag" >/dev/null 2>&1; then
+        echo "Image exists in registry: $image_name:$tag" >&2
+        return 0
+    else
+        echo "Image does not exist in registry: $image_name:$tag" >&2
+        return 1
+    fi
+}
+
+# Function to calculate checksum for a service
+calculate_checksum() {
+    local service=$1
+    local build_context
+    local build_dockerfile
+
+    # Get build context and dockerfile if available
+    build_context=$(yq ".services.${service}.build.context" "$DOCKER_COMPOSE_FILE")
+    build_dockerfile=$(yq ".services.${service}.build.dockerfile" "$DOCKER_COMPOSE_FILE")
+
+    # Start with an empty checksum data string
+    local checksum_data=""
+
+    # Add all build args to checksum
+    local build_args=$(yq -o=json ".services.${service}.build.args" "$DOCKER_COMPOSE_FILE")
+    if [[ "$build_args" != "null" ]]; then
+        checksum_data+="BUILD_ARGS:${build_args};"
+    fi
+
+    # Add build context files to checksum (recursively)
+    if [[ "$build_context" != "null" ]]; then
+        # Remove any quotes that might be in the build_context value
+        build_context=$(echo "$build_context" | tr -d '"'"'")
+
+        # Check if the path exists
+        if [[ -d "$build_context" ]]; then
+            echo "Processing build context directory: $build_context" >&2
+
+            # Find all files recursively in build context and add to checksum
+            find_output=$(find "$build_context" -type f | sort)
+
+            # Debug output to see what files were found
+            echo "Files found in build context:" >&2
+            echo "$find_output" | sed 's/^/  - /' >&2
+
+            # Process each file
+            while IFS= read -r file; do
+                if [[ -n "$file" && -f "$file" ]]; then
+                    # Get path relative to build context
+                    # Handle both with and without trailing slash
+                    if [[ "$build_context" == */ ]]; then
+                        local file_rel_path="${file#$build_context}"
+                    else
+                        local file_rel_path="${file#$build_context/}"
+                    fi
+
+                    local file_hash=$(md5sum "$file" | cut -d' ' -f1)
+                    checksum_data+="CONTEXT_FILE:${file_rel_path}=${file_hash};"
+                    echo "  Added file to checksum: $file_rel_path ($file_hash)" >&2
+                fi
+            done < <(echo "$find_output")
+        else
+            echo "Warning: Build context directory does not exist: $build_context" >&2
+        fi
+    fi
+
+    # Clean up checksum data by removing any remaining whitespace and line breaks
+    checksum_data=$(echo "$checksum_data" | tr -d '\r\n \t')
+
+    # Create a checksum of all the combined data
+    echo "Generated checksum data for $service" >&2
+    echo -n "$checksum_data" | md5sum | cut -d' ' -f1
+}
+
+ddev debug compose-config
+
+# Get all services that have a build definition
+services=$(yq '.services | keys | .[]' "$DOCKER_COMPOSE_FILE")
+build_services=()
+
+for service in $services; do
+    if [[ $(yq ".services.${service}.build" "$DOCKER_COMPOSE_FILE") != "null" ]]; then
+        build_services+=("$service")
+    fi
+done
+
+echo "Found services with build configuration: ${build_services[*]}"
+
+# Process each service with a build definition
+declare -A service_checksums
+declare -A service_images
+images_built=false
+
+# Prefix the dependency proxy
+sed -i "s|BASE_IMAGE: |BASE_IMAGE: ${PROXY_PREFIX}/|g" "$DOCKER_COMPOSE_FILE"
+
+for service in "${build_services[@]}"; do
+    echo "Calculating checksum for service: $service"
+
+    # Calculate checksum
+    checksum=$(calculate_checksum "$service")
+    service_checksums["$service"]=$checksum
+
+    # Define image name with checksum
+    registry_image="${REGISTRY_URL}/${PROJECT_NAME}-${service}"
+    image_name="${registry_image}:${checksum}"
+    service_images["$service"]=$image_name
+
+    echo "Service: $service, Checksum: $checksum"
+
+    echo "Checking if image exists in registry: ${image_name}"
+    if image_exists_in_registry "$registry_image" "$checksum"; then
+        echo "Image for $service already exists in registry"
+    else
+        echo "Building $service image..."
+        # Force DDEV to build the image
+        COMPOSE_BAKE=1 docker compose -f "$DOCKER_COMPOSE_FILE" build $service
+
+        # Get the built image name
+        original_image=$(yq ".services.${service}.image" "$DOCKER_COMPOSE_FILE")
+
+        echo "Tagging and pushing image: $original_image -> $image_name"
+        # Tag and push
+        docker tag "$original_image" "$image_name"
+        docker push "$image_name"
+        images_built=true
+
+        echo "Built and pushed $service image: $image_name"
+    fi
+done
+
+# Create a YAML override that uses the pre-built images
+echo "Creating docker-compose override file with pre-built images"
+cat > "$REGISTRY_OVERRIDE_FILE" <<EOL
+services:
+EOL
+
+for service in "${build_services[@]}"; do
+    cat >> "$REGISTRY_OVERRIDE_FILE" <<EOL
+  $service:
+    build: !reset []
+    image: ${service_images[$service]}
+EOL
+done
+
+cat > "$NO_WEB_DEPENDENCY_FILE" <<EOL
+services:
+  web:
+    depends_on: !reset []
+    networks: !reset []
+networks:
+    ddev_default:
+        external: false
+volumes:
+    database:
+        external: false
+    ddev-global-cache:
+        external: false
+    ddev-ssh-agent_socket_dir:
+        external: false
+EOL
+
+echo "Created $REGISTRY_OVERRIDE_FILE with pre-built images"
+
+if [ "$images_built" = true ]; then
+    echo "New images were built and pushed to the registry"
+else
+    echo "All images already existed in the registry"
+fi

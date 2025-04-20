@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# docker-proxy-setup.sh
+# ----------------------------------------
+# Source this from any script to:
+#  • read PROXY_LEVEL (group|direct|none)
+#  • set $PROXY_PREFIX accordingly
+#  • docker login if a proxy is selected
+# ----------------------------------------
+
+# Determine proxy level from env (default to “direct”)
+PROXY_LEVEL="${PROXY_LEVEL:-direct}"
+
+# Validate
+if ! [[ "$PROXY_LEVEL" =~ ^(group|direct|none)$ ]]; then
+  echo "ERROR: PROXY_LEVEL must be one of: group, direct, none (got '$PROXY_LEVEL')" >&2
+  return 1
+fi
+
+# Pick the correct prefix variable
+case "$PROXY_LEVEL" in
+  group)  PROXY_PREFIX="${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX:-}"   ;;
+  direct) PROXY_PREFIX="${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX:-}" ;;
+  none)   PROXY_PREFIX=""                                               ;;
+esac
+
+if [[ "$PROXY_LEVEL" != "none" && -z "$PROXY_PREFIX" ]]; then
+  echo "ERROR: required env for '$PROXY_LEVEL' proxy is not set." >&2
+  return 1
+fi
+
+# If using a proxy, log in once
+if [[ -n "$PROXY_PREFIX" ]]; then
+  echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login $CI_DEPENDENCY_PROXY_SERVER -u $CI_DEPENDENCY_PROXY_USER --password-stdin
+fi
+
+# Export for downstream scripts
+export PROXY_LEVEL PROXY_PREFIX

@@ -1,2 +1,162 @@
-instrumentation-opt-in: false
-omit-containers: [ddev-ssh-agent]
+fail_on_hook_fail: false
+instrumentation_opt_in: false
+internet_detection_timeout_ms: 3000
+last_started_version: v1.24.4
+letsencrypt_email: ""
+mkcert_caroot: /home/ddev/.local/share/mkcert
+no_bind_mounts: false
+omit_containers: [ddev-ssh-agent]
+performance_mode: none
+project_tld: ddev.site
+router_bind_all_interfaces: false
+router_http_port: "80"
+router_https_port: "443"
+mailpit_http_port: "8025"
+mailpit_https_port: "8026"
+simple_formatting: false
+table_style: default
+traefik_monitor_port: "10999"
+use_hardened_images: false
+use_letsencrypt: false
+wsl2_no_windows_hosts_mgt: false
+web_environment: []
+xdebug_ide_location: ""
+
+# You can turn off usage of the
+# ddev-ssh-agent and ddev-router containers with
+# omit_containers["ddev-ssh-agent", "ddev-router"]
+
+# You can opt in or out of sending instrumentation to the DDEV developers with
+# instrumentation_opt_in: true # or false
+#
+# Maximum number of collected events in the local queue. If reached, collected
+# data is sent.
+# instrumentation_queue_size: 100
+#
+# Reporting interval in hours. If the last report was longer ago, collected
+# data is sent.
+# instrumentation_reporting_interval: 24
+
+# performance_mode: "<default for the OS>"
+# DDEV offers performance optimization strategies to improve the filesystem
+# performance depending on your host system. Can be overridden with the project
+# config.
+#
+# Possible values are:
+#   - "none":    disables performance optimization.
+#   - "mutagen": enables Mutagen.
+#   - "nfs":     enables NFS.
+#
+# See https://ddev.readthedocs.io/en/stable/users/install/performance/#mutagen
+# and https://ddev.readthedocs.io/en/stable/users/install/performance/#nfs.
+
+# You can set the global project_tld. This way any project will use this tld. If not
+# set the local project_tld is used, or the default of DDEV.
+# project_tld: ""
+#
+# You can inject environment variables into the web container with:
+# web_environment:
+#     - SOMEENV=somevalue
+#     - SOMEOTHERENV=someothervalue
+
+# Adjust the default table style used in ddev list and describe
+# table_style: default
+# table_style: bold
+# table_style: bright
+
+# Require simpler formatting where possible
+# simpler_formatting: false
+
+# In unusual cases the default value to wait to detect internet availability is too short.
+# You can adjust this value higher to make it less likely that DDEV will declare internet
+# unavailable, but DDEV may wait longer on some commands. This should not be set below the default 3000
+# DDEV will ignore low values, as they're not useful
+# internet_detection_timeout_ms: 3000
+
+# You can enable 'ddev start' to be interrupted by a failing hook with
+# fail_on_hook_fail: true
+
+# router_http_port: <port>  # Port to be used for http (defaults to 80)
+# router_https_port: <port> # Port for https (defaults to 443)
+
+# xhprof_mode: [prepend|xhgui]
+# Set to "xhgui" to enable XHGui features
+# "xhgui" will become default in a future major release
+
+# instrumentation_user: <your_username> # can be used to give DDEV specific info about who you are
+# developer_mode: true # (defaults to false) is not used widely at this time.
+# router_bind_all_interfaces: false  # (defaults to false)
+#    If true, ddev-router will bind http/s and Mailpit ports on all
+#    network interfaces instead of localhost, so others on your local network can
+#    access those ports. Note that this exposes the Mailpit ports as well, which
+#    can be a major security issue, so choose wisely.
+
+# use_hardened_images: false
+# With hardened images a container that is exposed to the internet is
+# a harder target, although not as hard as a fully-secured host.
+# sudo and mailpit are removed, and since the web container
+# is run only as the owning user, only project files might be changed
+# if a CMS or PHP bug allowed creating or altering files, and
+# permissions should not allow escalation.
+#
+# xdebug_ide_location:
+# In some cases, especially WSL2, the IDE may be set up different ways
+# For example, if in WSL2 PhpStorm is running the Linux version inside WSL2
+# or if using JetBrains Gateway
+# then set xdebug_ide_location: WSL2
+# If using vscode language server, which listens inside the container
+# then set xdebug_ide_location: container
+
+# Lets Encrypt:
+# This integration is entirely experimental; your mileage may vary.
+# * Your host must be directly internet-connected.
+# * DNS for the hostname must be set to point to the host in question
+# * You must have router_bind_all_interfaces: true or else the Let's Encrypt Certbot
+#   process will not be able to process the IP address of the host (and nobody will be able to access your site)
+# * You will need to add a startup script to start your sites after a host reboot.
+# * If using several sites at a single top-level domain, you'll probably want to set
+#   project_tld to that top-level domain. Otherwise, you can use additional-hostnames or
+#   additional_fqdns.
+#
+# use_letsencrypt: false
+# (Experimental, only useful on an internet-based server)
+# Set to true if certificates are to be obtained via Certbot on https://letsencrypt.org/
+
+# letsencrypt_email: <email>
+# Email to be used for experimental letsencrypt certificates
+
+# fail_on_hook_fail: false
+# Decide whether 'ddev start' should be interrupted by a failing hook
+
+# traefik_monitor_port: 10999
+# Change this only if you're having conflicts with some
+# service that needs port 10999
+
+# xhgui_http_port: 8143
+# Router port used for xhgui HTTP, can be changed in case of conflicts
+
+# xhgui_https_port: 8142
+# Router port used for xhgui HTTPS, can be changed in case of conflicts
+
+# wsl2_no_windows_hosts_mgt: false
+# On WSL2 by default the Windows-side hosts file (normally C:\Windows\system32\drivers\etc\hosts)
+# is used for hosts file management, but doing that requires running sudo and ddev.exe on
+# Windows side; you may not want this if you're running your browser in WSL2 or for
+# various other reasons.
+
+# required_docker_compose_version: ""
+# This can be used to override the default required docker-compose version
+# It should normally be left alone, but can be set to, for example, "v2.1.1"
+
+# messages:
+#   ticker_interval: 20 // Interval in hours to show ticker messages, -1 disables the ticker
+# Controls the display of the ticker messages.
+
+# remote_config: # Intended for debugging only, should not be changed.
+#   update_interval: 10 // Interval in hours to download the remote config
+#   remote:
+#     owner: ddev
+#     repo: remote-config
+#     ref: main
+#     filepath: remote-config.jsonc
+# Controls the download of the remote config. Please do not change.

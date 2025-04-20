@@ -15,6 +15,6 @@ RUN ash ddev-install.sh \
 
 COPY --from=tianon/gosu /gosu /usr/local/bin/
 COPY --chown=ddev:ddev global-config.yaml /home/ddev/.ddev/global_config.yaml
+COPY scripts/* /usr/local/bin/
 WORKDIR /home/ddev
 ENTRYPOINT ["/usr/local/bin/ddev-entrypoint.sh"]
-CMD ["tail", "-f", "/dev/null"]
